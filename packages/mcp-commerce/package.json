@@ -1,0 +1,24 @@
+{
+  "name": "@quartermaster/mcp-commerce",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "start": "node --env-file-if-exists=../../.env dist/main.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@quartermaster/domain": "workspace:*",
+    "@quartermaster/shared": "workspace:*",
+    "zod": "^4.4.3"
+  }
+}

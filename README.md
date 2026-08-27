@@ -120,6 +120,7 @@ Full instructions, including the one step that does need a credential, are in
 | #1  | Repo scaffold            | _pending review_ |          |
 | #2  | Harness contract & smoke | _pending review_ |          |
 | #3  | Domain & budget math     | _pending review_ |          |
+| #4  | mcp-commerce read tools  | _pending review_ |          |
 
 ---
 
