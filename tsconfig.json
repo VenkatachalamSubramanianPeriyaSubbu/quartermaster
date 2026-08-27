@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/shared" }, { "path": "./packages/harness" }]
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/domain" },
+    { "path": "./packages/harness" }
+  ]
 }

@@ -40,6 +40,12 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0))
 
+  packages/domain:
+    dependencies:
+      '@quartermaster/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/harness:
     dependencies:
       '@quartermaster/shared':
