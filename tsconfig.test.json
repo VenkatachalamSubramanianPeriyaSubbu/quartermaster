@@ -9,7 +9,13 @@
     "declarationMap": false,
     "types": ["node"]
   },
+  // Everything checked but not emitted: tests, config, and one-off scripts.
   // NB: tsc does not support brace expansion in include globs, so each
   // workspace root is listed separately.
-  "include": ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts", "*.config.ts"]
+  "include": [
+    "packages/*/src/**/*.test.ts",
+    "apps/*/src/**/*.test.ts",
+    "scripts/**/*.ts",
+    "*.config.ts"
+  ]
 }

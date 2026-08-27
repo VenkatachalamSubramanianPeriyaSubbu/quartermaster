@@ -49,6 +49,7 @@ Hackathon Rule 3 asks that a judge can see the harness doing real work. Quarterm
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Bright Data MCP**     | _Attached, not built._ SERP, Web Unlocker, structured retail extractors. The discovery layer.                       |
 | `packages/mcp-commerce` | The ledger and checkout MCP server. Shopping list, budget state, order drafts, and the gated `checkout_order` tool. |
+| `packages/harness`      | The TrueForge client layer. Pause-event handling for the approval gate, plus the SDK contract tests.                |
 | `packages/shared`       | Cross-cutting TypeScript utilities — branded identifiers, assertions.                                               |
 | `agent/`                | Version-controlled agent manifest and git-backed `SKILL.md` packs.                                                  |
 | `apps/web`              | The approval console. List management, photo intake, live turn stream, approval inbox.                              |
@@ -77,7 +78,23 @@ pnpm run test:watch
 pnpm run format
 ```
 
-<!-- PR #2 adds the TrueForge runbook and .env.example here. -->
+### Running against a harness
+
+Quartermaster talks to a TrueForge harness over HTTP. Start one, register a
+model provider inside it, then point this repo at it:
+
+```bash
+npx --yes @truefoundry/trueforge@latest   # boots on :8790, no credentials needed
+cp .env.example .env                      # set TRUEFORGE_SMOKE_MODEL
+pnpm run smoke                            # proves a turn streams end to end
+```
+
+Full instructions, including the one step that does need a credential, are in
+**[docs/runbook.md](./docs/runbook.md)**.
+
+> Standalone TrueForge ships a **local sandbox fallback** using the machine's own
+> bash and python, and reports `sandbox` and `skill` as enabled on a clean
+> install. No Daytona account is needed for local development.
 
 ---
 
@@ -94,9 +111,10 @@ pnpm run format
 
 <!-- Required for hackathon submission. Filled in progressively as PRs merge. -->
 
-| PR  | Title         | Qodo findings    | Response |
-| --- | ------------- | ---------------- | -------- |
-| #1  | Repo scaffold | _pending review_ |          |
+| PR  | Title                    | Qodo findings    | Response |
+| --- | ------------------------ | ---------------- | -------- |
+| #1  | Repo scaffold            | _pending review_ |          |
+| #2  | Harness contract & smoke | _pending review_ |          |
 
 ---
 
