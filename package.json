@@ -11,14 +11,15 @@
   },
   "scripts": {
     "typecheck": "tsc --build && tsc -p tsconfig.test.json",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "tsc --build && eslint .",
+    "lint:fix": "tsc --build && eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test",
-    "clean": "tsc --build --clean"
+    "check": "pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run test",
+    "clean": "tsc --build --clean",
+    "smoke": "node --env-file-if-exists=.env scripts/smoke.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -30,5 +31,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@truefoundry/trueforge-sdk": "^0.1.3"
   }
 }
