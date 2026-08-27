@@ -103,7 +103,8 @@ Full instructions, including the one step that does need a credential, are in
 - **TypeScript strict**, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. Budget code must not silently coerce.
 - **Typed linting** via `typescript-eslint` strict + stylistic. Rule suppressions require a comment explaining why.
 - Tests live beside their source as `*.test.ts`. They are excluded from the emitting build and typechecked by `tsconfig.test.json`.
-- CI runs format, lint, typecheck, and test on every pull request.
+- `lint` builds before it lints. Typed linting resolves workspace imports through each package's generated declarations, so on a clean checkout `dist` must exist first — otherwise cross-package types come back unresolved and surface as `no-unsafe-*` errors instead of type errors.
+- CI runs format, typecheck, lint, and test on every pull request, in that order.
 
 ---
 

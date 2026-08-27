@@ -37,11 +37,18 @@ jobs:
       - name: Check formatting
         run: pnpm run format:check
 
-      - name: Lint
-        run: pnpm run lint
-
+      # Typecheck runs before lint deliberately. Typed linting resolves
+      # workspace imports through each package's built declarations, so on a
+      # clean checkout `dist` must exist first — otherwise cross-package types
+      # come back unresolved and surface as confusing no-unsafe-* lint errors
+      # rather than as the type errors they are. `pnpm run lint` also builds
+      # for this reason; the ordering here is so failures are reported by the
+      # step that actually owns them.
       - name: Typecheck
         run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
 
       - name: Test
         run: pnpm run test
