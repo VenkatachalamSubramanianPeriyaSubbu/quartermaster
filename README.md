@@ -49,6 +49,7 @@ Hackathon Rule 3 asks that a judge can see the harness doing real work. Quarterm
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Bright Data MCP**     | _Attached, not built._ SERP, Web Unlocker, structured retail extractors. The discovery layer.                       |
 | `packages/mcp-commerce` | The ledger and checkout MCP server. Shopping list, budget state, order drafts, and the gated `checkout_order` tool. |
+| `packages/domain`       | Money, the budget ledger, order validation, and the reference allocator. Pure, no I/O.                              |
 | `packages/harness`      | The TrueForge client layer. Pause-event handling for the approval gate, plus the SDK contract tests.                |
 | `packages/shared`       | Cross-cutting TypeScript utilities — branded identifiers, assertions.                                               |
 | `agent/`                | Version-controlled agent manifest and git-backed `SKILL.md` packs.                                                  |
@@ -101,6 +102,8 @@ Full instructions, including the one step that does need a credential, are in
 ## Repository conventions
 
 - **TypeScript strict**, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. Budget code must not silently coerce.
+- **No floating-point money, anywhere.** All amounts are integer minor units carrying a currency tag. Arithmetic that cannot be represented exactly throws rather than rounding quietly.
+- **The agent proposes, the domain disposes.** Nothing the model claims about an order is trusted — prices, quantities, and stock are all re-checked against the recorded candidate before a purchase can be proposed to a human.
 - **Typed linting** via `typescript-eslint` strict + stylistic. Rule suppressions require a comment explaining why.
 - Tests live beside their source as `*.test.ts`. They are excluded from the emitting build and typechecked by `tsconfig.test.json`.
 - `lint` builds before it lints. Typed linting resolves workspace imports through each package's generated declarations, so on a clean checkout `dist` must exist first — otherwise cross-package types come back unresolved and surface as `no-unsafe-*` errors instead of type errors.
@@ -116,6 +119,7 @@ Full instructions, including the one step that does need a credential, are in
 | --- | ------------------------ | ---------------- | -------- |
 | #1  | Repo scaffold            | _pending review_ |          |
 | #2  | Harness contract & smoke | _pending review_ |          |
+| #3  | Domain & budget math     | _pending review_ |          |
 
 ---
 
