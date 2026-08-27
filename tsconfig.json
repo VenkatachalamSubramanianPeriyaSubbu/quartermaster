@@ -1,8 +1,17 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/shared" },
-    { "path": "./packages/domain" },
-    { "path": "./packages/harness" }
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/domain"
+    },
+    {
+      "path": "./packages/harness"
+    },
+    {
+      "path": "./packages/mcp-commerce"
+    }
   ]
 }

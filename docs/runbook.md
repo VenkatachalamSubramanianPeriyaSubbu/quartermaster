@@ -99,6 +99,53 @@ by design.
 
 ---
 
+## 6. Start the commerce MCP server
+
+Quartermaster's own tools live in a separate process, because **TrueForge only
+supports remote MCP servers** — `McpServerType` has exactly one value,
+`"remote"`, and the manifest requires a URL. There is no stdio option.
+
+```bash
+pnpm --filter @quartermaster/mcp-commerce build
+MCP_COMMERCE_DB=./data/commerce.sqlite pnpm --filter @quartermaster/mcp-commerce start
+```
+
+It prints the URL to register:
+
+```
+quartermaster-ledger listening on http://127.0.0.1:8931/mcp
+```
+
+Verify it independently of the harness:
+
+```bash
+curl -s -X POST http://127.0.0.1:8931/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+A healthy server replies with `serverInfo.name: "quartermaster-ledger"`.
+
+Then register it with the harness (PR #6 automates this):
+
+```ts
+await client.settings.mcpServers.createOrUpdate({
+  name: 'quartermaster-ledger',
+  manifest: {
+    type: 'remote',
+    name: 'quartermaster-ledger',
+    description: 'Shopping list, budget state, and candidate records.',
+    url: 'http://127.0.0.1:8931/mcp',
+  },
+});
+```
+
+State lives in the SQLite file at `MCP_COMMERCE_DB`. Deleting it resets the
+ledger; keeping it is what lets budget state survive a restart.
+
+---
+
 ## What the smoke test is for
 
 It is the live half of a two-part contract check:
