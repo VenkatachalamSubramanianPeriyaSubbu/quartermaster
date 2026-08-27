@@ -2,12 +2,19 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asId, unwrap, type CandidateId, type ItemId, type ListId } from '@quartermaster/shared';
+import {
+  asId,
+  unwrap,
+  type CandidateId,
+  type ItemId,
+  type ListId,
+  type OrderId,
+} from '@quartermaster/shared';
 import { availableOf, createBudget, money, reserve } from '@quartermaster/domain';
 import { MemoryStore } from './memory-store.js';
 import { SqliteStore } from './sqlite-store.js';
-import { StoreError, type Store } from './store.js';
-import type { Budget, Candidate, Item } from '@quartermaster/domain';
+import { StoreError, type Store, type StoredOrder } from './store.js';
+import type { Budget, Candidate, Item, OrderLine } from '@quartermaster/domain';
 
 /** Narrow away the undefined a lookup can return, failing loudly if absent. */
 function unwrapBudget(budget: Budget | undefined): Budget {
@@ -217,6 +224,116 @@ describe.each(implementations)('$name', ({ create }) => {
 
     it('returns an empty list rather than throwing when nothing is recorded', () => {
       expect(seeded().listCandidates(LIST)).toEqual([]);
+    });
+  });
+
+  describe('orders', () => {
+    const ORDER = asId<OrderId>('order_1');
+
+    const line: OrderLine = {
+      itemId: SKIRT,
+      candidateId: asId<CandidateId>('cand_a'),
+      quantity: 1,
+      unitPrice: usd(4200),
+      shipping: usd(500),
+    };
+
+    const draft: StoredOrder = {
+      id: ORDER,
+      listId: LIST,
+      status: 'draft',
+      lines: [line],
+      total: usd(4700),
+    };
+
+    const seeded = (): Store => {
+      const s = open();
+      s.createList({ id: LIST, ceiling: usd(10_000) });
+      s.addItem(LIST, skirtItem);
+      s.recordCandidate(LIST, candidateFor('cand_a', SKIRT, 4200));
+      return s;
+    };
+
+    it('round-trips a draft order with its lines', () => {
+      const s = seeded();
+      s.putOrder(draft);
+      expect(s.getOrder(LIST, ORDER)).toEqual(draft);
+    });
+
+    it('updates an existing order in place rather than duplicating it', () => {
+      const s = seeded();
+      s.putOrder(draft);
+      s.putOrder({ ...draft, status: 'reserved' });
+      expect(s.listOrders(LIST)).toHaveLength(1);
+      expect(s.getOrder(LIST, ORDER)?.status).toBe('reserved');
+    });
+
+    it('round-trips a settled order including its receipt', () => {
+      const s = seeded();
+      const settled: StoredOrder = {
+        ...draft,
+        status: 'settled',
+        settlementKey: 'settle-key-0001',
+        settlement: {
+          reference: 'mock_settle-key-0001',
+          amount: usd(4700),
+          settledAt: '2026-08-27T00:00:00.000Z',
+          provider: 'mock',
+        },
+      };
+      s.putOrder(settled);
+      expect(s.getOrder(LIST, ORDER)).toEqual(settled);
+    });
+
+    it('omits settlement fields entirely when absent', () => {
+      // exactOptionalPropertyTypes: absent, not set to undefined.
+      const s = seeded();
+      s.putOrder(draft);
+      const stored = s.getOrder(LIST, ORDER);
+      expect(stored !== undefined && 'settlement' in stored).toBe(false);
+      expect(stored !== undefined && 'settlementKey' in stored).toBe(false);
+    });
+
+    it('finds a settled order by its settlement key', () => {
+      // This lookup is what makes a repeated checkout safe, so it has to work
+      // identically in both stores.
+      const s = seeded();
+      s.putOrder({ ...draft, status: 'settled', settlementKey: 'settle-key-0001' });
+      expect(s.findBySettlementKey(LIST, 'settle-key-0001')?.id).toBe(ORDER);
+      expect(s.findBySettlementKey(LIST, 'some-other-key')).toBeUndefined();
+    });
+
+    it('does not match an order that has no settlement key', () => {
+      const s = seeded();
+      s.putOrder(draft);
+      expect(s.findBySettlementKey(LIST, 'settle-key-0001')).toBeUndefined();
+    });
+
+    it('preserves line order across a rewrite', () => {
+      const s = seeded();
+      s.addItem(LIST, mugItem);
+      s.recordCandidate(LIST, candidateFor('cand_b', MUG, 1200));
+      const second: OrderLine = {
+        itemId: MUG,
+        candidateId: asId<CandidateId>('cand_b'),
+        quantity: 2,
+        unitPrice: usd(1200),
+        shipping: usd(0),
+      };
+      s.putOrder({ ...draft, lines: [line, second], total: usd(7100) });
+      s.putOrder({ ...draft, lines: [second, line], total: usd(7100) });
+      expect(s.getOrder(LIST, ORDER)?.lines.map((l) => l.itemId)).toEqual([MUG, SKIRT]);
+    });
+
+    it('returns undefined for an order on an unknown list', () => {
+      expect(open().getOrder(asId<ListId>('nope'), ORDER)).toBeUndefined();
+    });
+
+    it('rejects an order total in the wrong currency', () => {
+      const s = seeded();
+      expect(() => {
+        s.putOrder({ ...draft, total: money(4700, 'EUR') });
+      }).toThrow(StoreError);
     });
   });
 });

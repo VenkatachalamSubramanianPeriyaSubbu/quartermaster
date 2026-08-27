@@ -127,6 +127,31 @@ curl -s -X POST http://127.0.0.1:8931/mcp \
 
 A healthy server replies with `serverInfo.name: "quartermaster-ledger"`.
 
+To see the whole tool surface and its annotations as the harness will see it:
+
+```bash
+pnpm run probe:mcp http://127.0.0.1:8931/mcp
+```
+
+```
+  TOOL                 READ-ONLY   DESTRUCTIVE
+  -------------------- ----------- -----------
+  cancel_order         false       false
+  checkout_order       false       true
+  create_order_draft   false       false
+  get_budget_status    true        false
+  get_shopping_list    true        false
+  list_candidates      true        false
+  record_candidate     false       false
+  reserve_funds        false       false
+
+  Gate these in the agent spec: checkout_order
+```
+
+Those annotations are what TrueForge's `@read-only`, `@write`, and
+`@destructive` selectors resolve against, so this is the authoritative view
+when writing the agent spec.
+
 Then register it with the harness (PR #6 automates this):
 
 ```ts

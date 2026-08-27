@@ -1,4 +1,4 @@
-import type { CandidateId, ItemId, ListId } from '@quartermaster/shared';
+import type { CandidateId, ItemId, ListId, OrderId } from '@quartermaster/shared';
 import {
   createBudget,
   type Budget,
@@ -6,12 +6,13 @@ import {
   type Item,
   type ShoppingList,
 } from '@quartermaster/domain';
-import { StoreError, type NewList, type Store } from './store.js';
+import { StoreError, type NewList, type Store, type StoredOrder } from './store.js';
 
 interface ListRecord {
   list: ShoppingList;
   budget: Budget;
   candidates: Map<CandidateId, Candidate>;
+  orders: Map<OrderId, StoredOrder>;
 }
 
 /**
@@ -29,7 +30,12 @@ export class MemoryStore implements Store {
       throw new StoreError('duplicate_list', `List ${id} already exists.`);
     }
     const list: ShoppingList = { id, currency: ceiling.currency, items: [] };
-    this.#lists.set(id, { list, budget: createBudget(ceiling), candidates: new Map() });
+    this.#lists.set(id, {
+      list,
+      budget: createBudget(ceiling),
+      candidates: new Map(),
+      orders: new Map(),
+    });
     return list;
   }
 
@@ -100,6 +106,29 @@ export class MemoryStore implements Store {
     const record = this.#require(listId);
     const all = [...record.candidates.values()];
     return itemId === undefined ? all : all.filter((candidate) => candidate.itemId === itemId);
+  }
+
+  putOrder(order: StoredOrder): void {
+    const record = this.#require(order.listId);
+    if (order.total.currency !== record.list.currency) {
+      throw new StoreError(
+        'currency_mismatch',
+        `Order total is in ${order.total.currency} but list ${order.listId} is in ${record.list.currency}.`,
+      );
+    }
+    record.orders.set(order.id, order);
+  }
+
+  getOrder(listId: ListId, id: OrderId): StoredOrder | undefined {
+    return this.#lists.get(listId)?.orders.get(id);
+  }
+
+  listOrders(listId: ListId): StoredOrder[] {
+    return [...this.#require(listId).orders.values()];
+  }
+
+  findBySettlementKey(listId: ListId, settlementKey: string): StoredOrder | undefined {
+    return this.listOrders(listId).find((order) => order.settlementKey === settlementKey);
   }
 
   #require(listId: ListId): ListRecord {
