@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "check": "pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run test",
     "clean": "tsc --build --clean",
-    "smoke": "node --env-file-if-exists=.env scripts/smoke.ts"
+    "smoke": "node --env-file-if-exists=.env scripts/smoke.ts",
+    "probe:mcp": "node scripts/probe-mcp.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

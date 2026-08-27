@@ -103,7 +103,9 @@ Full instructions, including the one step that does need a credential, are in
 
 - **TypeScript strict**, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. Budget code must not silently coerce.
 - **No floating-point money, anywhere.** All amounts are integer minor units carrying a currency tag. Arithmetic that cannot be represented exactly throws rather than rounding quietly.
-- **The agent proposes, the domain disposes.** Nothing the model claims about an order is trusted — prices, quantities, and stock are all re-checked against the recorded candidate before a purchase can be proposed to a human.
+- **The agent proposes, the domain disposes.** Nothing the model claims about an order is trusted — prices, quantities, and stock are all re-checked against the recorded candidate before a purchase can be proposed to a human, and again immediately before it is charged.
+- **Settlement is idempotent.** `checkout_order` takes a settlement key. Calling it twice with the same key returns the original receipt without contacting the merchant a second time, and the database enforces one settlement per key regardless.
+- **Money never settles against a live retailer.** Settlement goes through a `Merchant` interface; the default is a mock, and the only alternative is Stripe in test mode, which refuses to construct with a live key.
 - **Typed linting** via `typescript-eslint` strict + stylistic. Rule suppressions require a comment explaining why.
 - Tests live beside their source as `*.test.ts`. They are excluded from the emitting build and typechecked by `tsconfig.test.json`.
 - `lint` builds before it lints. Typed linting resolves workspace imports through each package's generated declarations, so on a clean checkout `dist` must exist first — otherwise cross-package types come back unresolved and surface as `no-unsafe-*` errors instead of type errors.
@@ -121,6 +123,7 @@ Full instructions, including the one step that does need a credential, are in
 | #2  | Harness contract & smoke | _pending review_ |          |
 | #3  | Domain & budget math     | _pending review_ |          |
 | #4  | mcp-commerce read tools  | _pending review_ |          |
+| #5  | Gated money tools        | _pending review_ |          |
 
 ---
 

@@ -72,13 +72,17 @@ afterEach(async () => {
 
 describe('tool discovery', () => {
   it('advertises the four read-side tools', async () => {
+    // The server also carries the money tools; those are asserted in
+    // write-tools.test.ts. Here we only care that the read side is present.
     const { tools } = await harness.client.listTools();
-    expect(tools.map((tool) => tool.name).sort()).toEqual([
-      'get_budget_status',
-      'get_shopping_list',
-      'list_candidates',
-      'record_candidate',
-    ]);
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'get_budget_status',
+        'get_shopping_list',
+        'list_candidates',
+        'record_candidate',
+      ]),
+    );
   });
 
   it('marks the genuinely read-only tools as such', async () => {

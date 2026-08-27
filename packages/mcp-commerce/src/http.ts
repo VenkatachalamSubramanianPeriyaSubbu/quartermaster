@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Store } from './store.js';
+import { MockMerchant, type Merchant } from './merchant.js';
 import { createCommerceServer } from './server.js';
 
 /**
@@ -15,6 +16,8 @@ import { createCommerceServer } from './server.js';
 
 export interface HttpServerOptions {
   readonly store: Store;
+  /** Defaults to the mock. Settling for real must be an explicit choice. */
+  readonly merchant?: Merchant;
   readonly port?: number;
   readonly host?: string;
   /** Path the harness connects to. Registered as the MCP server's URL. */
@@ -29,11 +32,12 @@ export interface RunningServer {
 
 export async function startHttpServer({
   store,
+  merchant = new MockMerchant(),
   port = 8931,
   host = '127.0.0.1',
   path = '/mcp',
 }: HttpServerOptions): Promise<RunningServer> {
-  const mcp = createCommerceServer(store);
+  const mcp = createCommerceServer(store, merchant);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
 
   // The SDK declares Transport's optional callbacks as `onclose?: () => void`

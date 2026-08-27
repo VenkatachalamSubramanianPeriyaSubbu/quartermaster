@@ -1,5 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
-import { asId, type CandidateId, type ItemId, type ListId } from '@quartermaster/shared';
+import {
+  asId,
+  type CandidateId,
+  type ItemId,
+  type ListId,
+  type OrderId,
+} from '@quartermaster/shared';
 import {
   money,
   type Availability,
@@ -9,7 +15,13 @@ import {
   type Item,
   type ShoppingList,
 } from '@quartermaster/domain';
-import { StoreError, type NewList, type Store } from './store.js';
+import {
+  StoreError,
+  type NewList,
+  type OrderStatus,
+  type Store,
+  type StoredOrder,
+} from './store.js';
 
 /**
  * SQLite-backed store, using Node's built-in `node:sqlite`.
@@ -56,9 +68,40 @@ CREATE TABLE IF NOT EXISTS candidates (
   recorded_seq      INTEGER NOT NULL
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS orders (
+  id                  TEXT PRIMARY KEY,
+  list_id             TEXT    NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+  status              TEXT    NOT NULL,
+  total_minor         INTEGER NOT NULL,
+  settlement_key      TEXT,
+  settlement_ref      TEXT,
+  settlement_at       TEXT,
+  settlement_provider TEXT,
+  created_seq         INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS order_lines (
+  order_id          TEXT    NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  item_id           TEXT    NOT NULL,
+  candidate_id      TEXT    NOT NULL,
+  quantity          INTEGER NOT NULL,
+  unit_price_minor  INTEGER NOT NULL,
+  shipping_minor    INTEGER NOT NULL,
+  position          INTEGER NOT NULL,
+  PRIMARY KEY (order_id, position)
+) STRICT;
+
 CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id, position);
 CREATE INDEX IF NOT EXISTS idx_candidates_list ON candidates(list_id, recorded_seq);
 CREATE INDEX IF NOT EXISTS idx_candidates_item ON candidates(list_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_orders_list ON orders(list_id, created_seq);
+
+-- A settlement key must be unique per list, enforced by the database rather
+-- than by application logic. This is the last line of defence against a
+-- double charge: even a race between two checkout calls cannot produce two
+-- settled orders under the same key.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_settlement_key
+  ON orders(list_id, settlement_key) WHERE settlement_key IS NOT NULL;
 `;
 
 interface ListRow {
@@ -86,6 +129,25 @@ interface CandidateRow {
   unit_price_minor: number;
   shipping_minor: number;
   availability: string;
+}
+
+interface OrderRow {
+  id: string;
+  list_id: string;
+  status: string;
+  total_minor: number;
+  settlement_key: string | null;
+  settlement_ref: string | null;
+  settlement_at: string | null;
+  settlement_provider: string | null;
+}
+
+interface OrderLineRow {
+  item_id: string;
+  candidate_id: string;
+  quantity: number;
+  unit_price_minor: number;
+  shipping_minor: number;
 }
 
 export class SqliteStore implements Store {
@@ -296,6 +358,141 @@ export class SqliteStore implements Store {
         ? {}
         : { maxUnitPrice: money(row.max_unit_price_minor, currency) }),
     }));
+  }
+
+  putOrder(order: StoredOrder): void {
+    const list = this.#requireRow(order.listId);
+    const existing = this.#db
+      .prepare('SELECT created_seq FROM orders WHERE id = ?')
+      .get(order.id) as { created_seq: number } | undefined;
+    const seq =
+      existing?.created_seq ??
+      (
+        this.#db
+          .prepare('SELECT COUNT(*) AS count FROM orders WHERE list_id = ?')
+          .get(order.listId) as {
+          count: number;
+        }
+      ).count;
+
+    if (order.total.currency !== list.currency) {
+      throw new StoreError(
+        'currency_mismatch',
+        `Order total is in ${order.total.currency} but list ${order.listId} is in ${list.currency}.`,
+      );
+    }
+
+    // Whole-order write: replacing the header and its lines together means a
+    // partially-written order can never be observed.
+    this.#db.exec('BEGIN');
+    try {
+      this.#db
+        .prepare(
+          `INSERT INTO orders
+             (id, list_id, status, total_minor, settlement_key, settlement_ref,
+              settlement_at, settlement_provider, created_seq)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             total_minor = excluded.total_minor,
+             settlement_key = excluded.settlement_key,
+             settlement_ref = excluded.settlement_ref,
+             settlement_at = excluded.settlement_at,
+             settlement_provider = excluded.settlement_provider`,
+        )
+        .run(
+          order.id,
+          order.listId,
+          order.status,
+          order.total.minorUnits,
+          order.settlementKey ?? null,
+          order.settlement?.reference ?? null,
+          order.settlement?.settledAt ?? null,
+          order.settlement?.provider ?? null,
+          seq,
+        );
+
+      this.#db.prepare('DELETE FROM order_lines WHERE order_id = ?').run(order.id);
+      const insertLine = this.#db.prepare(
+        `INSERT INTO order_lines
+           (order_id, item_id, candidate_id, quantity, unit_price_minor, shipping_minor, position)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      order.lines.forEach((line, index) => {
+        insertLine.run(
+          order.id,
+          line.itemId,
+          line.candidateId,
+          line.quantity,
+          line.unitPrice.minorUnits,
+          line.shipping.minorUnits,
+          index,
+        );
+      });
+      this.#db.exec('COMMIT');
+    } catch (error) {
+      this.#db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  getOrder(listId: ListId, id: OrderId): StoredOrder | undefined {
+    const list = this.#listRow(listId);
+    if (list === undefined) return undefined;
+    const row = this.#db
+      .prepare('SELECT * FROM orders WHERE list_id = ? AND id = ?')
+      .get(listId, id) as OrderRow | undefined;
+    return row === undefined ? undefined : this.#toOrder(row, list.currency as Currency);
+  }
+
+  listOrders(listId: ListId): StoredOrder[] {
+    const list = this.#requireRow(listId);
+    const rows = this.#db
+      .prepare('SELECT * FROM orders WHERE list_id = ? ORDER BY created_seq')
+      .all(listId) as unknown as OrderRow[];
+    return rows.map((row) => this.#toOrder(row, list.currency as Currency));
+  }
+
+  findBySettlementKey(listId: ListId, settlementKey: string): StoredOrder | undefined {
+    const list = this.#listRow(listId);
+    if (list === undefined) return undefined;
+    const row = this.#db
+      .prepare('SELECT * FROM orders WHERE list_id = ? AND settlement_key = ?')
+      .get(listId, settlementKey) as OrderRow | undefined;
+    return row === undefined ? undefined : this.#toOrder(row, list.currency as Currency);
+  }
+
+  #toOrder(row: OrderRow, currency: Currency): StoredOrder {
+    const lines = this.#db
+      .prepare('SELECT * FROM order_lines WHERE order_id = ? ORDER BY position')
+      .all(row.id) as unknown as OrderLineRow[];
+
+    const settlement =
+      row.settlement_ref === null || row.settlement_at === null || row.settlement_provider === null
+        ? undefined
+        : {
+            reference: row.settlement_ref,
+            amount: money(row.total_minor, currency),
+            settledAt: row.settlement_at,
+            provider: row.settlement_provider,
+          };
+
+    return {
+      id: asId<OrderId>(row.id),
+      listId: asId<ListId>(row.list_id),
+      status: row.status as OrderStatus,
+      total: money(row.total_minor, currency),
+      lines: lines.map((line) => ({
+        itemId: asId<ItemId>(line.item_id),
+        candidateId: asId<CandidateId>(line.candidate_id),
+        quantity: line.quantity,
+        unitPrice: money(line.unit_price_minor, currency),
+        shipping: money(line.shipping_minor, currency),
+      })),
+      // exactOptionalPropertyTypes: omit rather than set undefined.
+      ...(settlement === undefined ? {} : { settlement }),
+      ...(row.settlement_key === null ? {} : { settlementKey: row.settlement_key }),
+    };
   }
 
   #listRow(id: ListId): ListRow | undefined {
