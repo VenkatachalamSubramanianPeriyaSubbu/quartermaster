@@ -1,0 +1,15 @@
+{
+  // Tests are excluded from the emitting build so they never reach dist, but we
+  // still want them fully typechecked and lintable. This project covers them.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  // NB: tsc does not support brace expansion in include globs, so each
+  // workspace root is listed separately.
+  "include": ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts", "*.config.ts"]
+}
